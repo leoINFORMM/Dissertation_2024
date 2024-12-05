@@ -1,0 +1,61 @@
+# Load necessary libraries
+install.packages(c('glmnet', 'tidyverse', 'caret'))  # Install packages if not already installed
+library(glmnet)
+library(tidyverse)
+library(caret)
+
+# Load your data (replace the file path with the correct path to your Excel file)
+library(readxl)
+data <- read_excel("C:/Users/user/Documents/Postgrad/Dissertation/Data/R/Testing 1.xlsx")
+
+# Convert the data frame to a more manageable format
+# Ensure that the Skin Cancer Type is a factor and others are numeric
+data$`Skin Cancer Type` <- as.factor(data$`Skin Cancer Type`)
+data_matrix <- as.matrix(data[, -1])  # Exclude the first column for the feature matrix
+response <- data$`Skin Cancer Type`   # Response variable
+
+# Split the data into training and test sets
+set.seed(123)  # For reproducibility
+train_index <- createDataPartition(response, p = 0.8, list = FALSE)
+train_data <- data_matrix[train_index, ]
+test_data <- data_matrix[-train_index, ]
+train_response <- response[train_index]
+test_response <- response[-train_index]
+
+# Standardize the data
+train_data_scaled <- scale(train_data)
+test_data_scaled <- scale(test_data)
+
+# Cleaning missing value
+na_columns <- colSums(is.na(train_data_scaled)) > 0
+train_data_scaled_clean <- train_data_scaled[, !na_columns]
+na_columns <- colSums(is.na(test_data_scaled)) > 0
+test_data_scaled_clean <- test_data_scaled[, !na_columns]
+
+# Logistic Regression (baseline model)
+logistic_model <- glm(train_response ~ ., data = as.data.frame(train_data_scaled_clean), family = "binomial")
+
+# Ridge Regression
+ridge_model <- cv.glmnet(train_data_scaled_clean, train_response, family = "binomial", alpha = 0)
+
+
+# Extract the coefficients for Ridge and Lasso
+ridge_coefs <- coef(ridge_model, s = "lambda.min")
+
+# Convert the ridge and lasso coefficient matrices to a regular matrix
+ridge_coefs_dense <- as.matrix(ridge_coefs)
+
+# Extract significant ridge and lasso features (i.e., non-zero coefficients)
+significant_ridge_features <- ridge_coefs_dense[ridge_coefs_dense != 0, , drop = FALSE]
+
+print("Significant features from Ridge Regression:")
+print(significant_ridge_features)
+
+# Predict on test data
+ridge_preds <- predict(ridge_model, newx = test_data_scaled, s = "lambda.min", type = "class")
+
+# Evaluation
+ridge_accuracy <- sum(ridge_preds == test_response) / length(test_response)
+
+cat("Ridge Regression Accuracy: ", ridge_accuracy, "\n")
+cat("Lasso Regression Accuracy: ", lasso_accuracy, "\n")

@@ -1,0 +1,81 @@
+# Load necessary libraries
+library(glmnet)
+library(tidyverse)
+library(caret)
+library(readxl)
+
+# Load your data (replace the file path with the correct path to your Excel file)
+data <- read_excel("C:/Users/user/Documents/Postgrad/Dissertation/Data/R/Testing 1.xlsx")
+
+# Convert the data frame to a more manageable format
+# Ensure that the Skin Cancer Type is a factor and others are numeric
+data$`Skin Cancer Type` <- as.factor(data$`Skin Cancer Type`)
+data_matrix <- as.matrix(data[, -1])  # Exclude the first column for the feature matrix
+response <- data$`Skin Cancer Type`   # Response variable
+
+# Set the number of bootstrap iterations
+n_iterations <- 1000
+
+# Lists to store accuracy and significant features
+accuracy_list <- numeric(n_iterations)
+coefficients_list <- list()
+
+# Bootstrap Aggregation
+set.seed(123)  # For reproducibility
+for (i in 1:n_iterations) {
+  # Create bootstrap sample
+  train_index <- sample(1:nrow(data_matrix), replace = TRUE)
+  train_data <- data_matrix[train_index, ]
+  train_response <- response[train_index]
+  
+  # Split the remaining data into test set
+  test_index <- setdiff(1:nrow(data_matrix), train_index)
+  test_data <- data_matrix[test_index, ]
+  test_response <- response[test_index]
+  
+  # Standardize the data
+  train_data_scaled <- scale(train_data)
+  test_data_scaled <- scale(test_data)
+
+  # Identify columns with NAs in the training data and remove them from both train and test sets
+  na_columns_train <- colSums(is.na(train_data_scaled)) > 0
+  train_data_scaled_clean <- train_data_scaled[, !na_columns_train]
+
+  # Remove columns with NAs from the test data
+  na_columns_test <- colSums(is.na(test_data_scaled)) > 0
+  test_data_scaled_clean <- test_data_scaled[, !na_columns_test]
+
+  # Find common columns between train and test datasets
+  common_columns <- intersect(colnames(train_data_scaled_clean), colnames(test_data_scaled_clean))
+
+  # Subset the training and test datasets to keep only the common columns
+  train_data_scaled_clean <- train_data_scaled_clean[, common_columns]
+  test_data_scaled_clean <- test_data_scaled_clean[, common_columns]
+
+  # Lasso Regression with Cross-Validation
+  lasso_model <- cv.glmnet(train_data_scaled_clean, train_response, family = "binomial", alpha = 1)
+
+  # Predict on the test data
+  lasso_preds <- predict(lasso_model, newx = test_data_scaled_clean, s = "lambda.min", type = "class")
+
+  # Calculate accuracy
+  lasso_accuracy <- sum(lasso_preds == test_response) / length(test_response)
+  accuracy_list[i] <- lasso_accuracy
+
+  # Extract non-zero coefficients
+  lasso_coefs <- coef(lasso_model, s = "lambda.min")
+
+  # Convert the lasso coefficient matrix (S4 object) to a regular matrix
+  lasso_coefs_dense <- as.matrix(lasso_coefs)
+
+  # Extract significant lasso features (i.e., non-zero coefficients)
+  significant_lasso_features <- lasso_coefs_dense[lasso_coefs_dense != 0, , drop = FALSE]
+
+  # Store significant features for this iteration
+  coefficients_list[[i]] <- significant_lasso_features
+}
+
+# Print results
+cat("Bootstrapping completed.\n")
+cat("Average Accuracy over 1000 iterations: ", mean(accuracy_list), "\n")
+
