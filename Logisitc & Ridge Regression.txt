@@ -6,7 +6,7 @@ library(caret)
 
 # Load your data (replace the file path with the correct path to your Excel file)
 library(readxl)
-data <- read_excel("C:/Users/user/Documents/Postgrad/Dissertation/Data/R/Testing 1.xlsx")
+data <- read_excel("C:/Users/user/Documents/Postgrad/Dissertation/Data/R/Compiled_dataset_GEO.xlsx")
 
 # Convert the data frame to a more manageable format
 # Ensure that the Skin Cancer Type is a factor and others are numeric
